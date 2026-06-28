@@ -2,8 +2,7 @@
 
 ## Overview
 
-Welcome to the Stronghold Asset Management package repository. This repository is maintained by Stronghold Asset Management to store and ensure the availability of certain crucial packages used in our
-systems. These packages are essential for the continuous operation and stability of our services.
+Welcome to the DX Advisory governed package mirror. This repository is maintained by DX Advisory to store and preserve package availability for internal and approved client-system support. These packages support controlled DX Advisory workflows and approved client-reference systems.
 
 ## Purpose
 
