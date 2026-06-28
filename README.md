@@ -9,7 +9,7 @@ systems. These packages are essential for the continuous operation and stability
 
 The primary objective of this repository is to:
 
-- Maintain a backup of key packages used within Stronghold Asset Management systems.
+- Maintain a backup of key packages used within DX Advisory internal and approved client-support systems.
 - Ensure the availability and accessibility of these packages at all times.
 
 ## Package List
