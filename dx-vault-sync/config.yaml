@@ -1,0 +1,131 @@
+vault:
+  path: "${OBSIDIAN_VAULT_PATH:-~/ObsidianVault}"
+  memory_dir: "DX-Memory"
+
+sync:
+  auto_extract: true
+  learn_interval: 6
+  max_conversation_notes: 1000
+  dedup_threshold: 0.85
+
+categories:
+  - key: "decision"
+    label: "Quyết định"
+    vault_dir: "decisions"
+    tags: ["decision", "strategy", "action"]
+  - key: "learning"
+    label: "Kiến thức"
+    vault_dir: "learnings"
+    tags: ["learning", "insight", "technique"]
+  - key: "entity"
+    label: "Thực thể"
+    vault_dir: "entities"
+    tags: ["person", "company", "project", "product"]
+  - key: "task"
+    label: "Công việc"
+    vault_dir: "tasks"
+    tags: ["todo", "action-item", "follow-up"]
+  - key: "context"
+    label: "Ngữ cảnh"
+    vault_dir: "context"
+    tags: ["preference", "habit", "style"]
+  - key: "conversation"
+    label: "Hội thoại"
+    vault_dir: "conversations"
+    tags: ["conversation", "session", "chat"]
+
+platforms:
+  claude_code:
+    enabled: true
+    session_dir: "~/.claude/sessions"
+  chatgpt:
+    enabled: false
+    export_dir: ""
+  jarvis:
+    enabled: false
+    api_url: ""
+
+business:
+  entities:
+    - name: "DX Advisory"
+      type: "primary"
+      track: ["finance", "marketing", "market"]
+  data_sources:
+    bigdata:
+      enabled: true
+      type: "mcp"
+      tools_prefix: "mcp__Bigdata_com__"
+      capabilities: ["company_tearsheet", "sentiment", "events", "search"]
+      use_for: ["market-intel", "competitors", "news-scan"]
+    supermetrics:
+      enabled: true
+      type: "mcp"
+      tools_prefix: "mcp__Supermetrics_Marketing_Analytics__"
+      capabilities: ["data_query", "accounts", "fields"]
+      use_for: ["marketing-analytics"]
+    manual:
+      enabled: true
+      type: "input"
+      use_for: ["finance-snapshot"]
+  business_categories:
+    - key: "market-intel"
+      label: "Thông tin thị trường"
+      vault_dir: "business/market-intel"
+      frequency: "daily"
+    - key: "marketing-analytics"
+      label: "Phân tích Marketing"
+      vault_dir: "business/marketing-analytics"
+      frequency: "daily"
+    - key: "finance-snapshots"
+      label: "Ảnh chụp tài chính"
+      vault_dir: "business/finance-snapshots"
+      frequency: "weekly"
+    - key: "alerts"
+      label: "Cảnh báo"
+      vault_dir: "business/alerts"
+      frequency: "realtime"
+    - key: "competitors"
+      label: "Đối thủ cạnh tranh"
+      vault_dir: "business/competitors"
+      frequency: "weekly"
+    - key: "reports"
+      label: "Báo cáo tổng hợp"
+      vault_dir: "business/reports"
+      frequency: "daily"
+  anomaly_detection:
+    threshold_percent: 20
+    tracked_metrics: ["revenue", "profit", "orders", "customers"]
+
+autonomy:
+  gap_scan:
+    enabled: true
+    frequency: "daily"
+    stale_thresholds:
+      task: 7
+      decision: 30
+      entity: 14
+      learning: 60
+      context: 30
+      finance-snapshots: 7
+      marketing-analytics: 7
+      market-intel: 14
+  auto_research:
+    enabled: true
+    max_prompts_per_scan: 5
+    sources: ["bigdata", "supermetrics", "web"]
+  weekly_digest:
+    enabled: true
+    day: "monday"
+    default_days: 7
+    auto_save: true
+  memo_bridge:
+    claude_md_inject: true
+    jarvis_export: false
+    auto_tick: true
+
+output:
+  format: "obsidian"
+  frontmatter: true
+  wiki_links: true
+  auto_tag: true
+  language: "vi"

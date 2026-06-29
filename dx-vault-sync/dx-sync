@@ -1,0 +1,445 @@
+#!/usr/bin/env bash
+# DX Vault Sync — Main CLI entry point
+# Usage:
+#   dx-sync sync "some text to extract and save"
+#   dx-sync sync --file conversation.md
+#   dx-sync sync --session ~/.claude/sessions/abc
+#   dx-sync context
+#   dx-sync context --query "FastAPI"
+#   dx-sync status
+#   dx-sync setup
+#   dx-sync demo
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SYNC_SCRIPT="${SCRIPT_DIR}/scripts/sync_engine.py"
+VAULT_PATH="${OBSIDIAN_VAULT_PATH:-$HOME/ObsidianVault}"
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+PURPLE='\033[0;35m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+banner() {
+    echo -e "${PURPLE}"
+    echo "  ╔══════════════════════════════════════╗"
+    echo "  ║       DX Vault Sync v1.0.0           ║"
+    echo "  ║  Claude ↔ Obsidian Auto-Sync Engine  ║"
+    echo "  ╚══════════════════════════════════════╝"
+    echo -e "${NC}"
+}
+
+usage() {
+    banner
+    echo -e "${CYAN}Usage:${NC}"
+    echo "  dx-sync <command> [options]"
+    echo ""
+    echo -e "${CYAN}Commands:${NC}"
+    echo -e "  ${GREEN}sync${NC}       Sync content to Obsidian Vault"
+    echo -e "  ${GREEN}context${NC}    Load context from Vault"
+    echo -e "  ${GREEN}status${NC}     Show vault statistics"
+    echo -e "  ${GREEN}setup${NC}      Interactive setup wizard"
+    echo -e "  ${GREEN}demo${NC}       Run demo with sample data"
+    echo -e "  ${GREEN}test${NC}       Run test suite"
+    echo ""
+    echo -e "${CYAN}Business Data (Phase 2):${NC}"
+    echo -e "  ${GREEN}biz${NC}        Process business data into vault"
+    echo -e "  ${GREEN}biz-loop${NC}   Generate MCP prompts for data collection"
+    echo -e "  ${GREEN}biz-status${NC} Show business data statistics"
+    echo -e "  ${GREEN}biz-demo${NC}   Run business data demo"
+    echo ""
+    echo -e "${CYAN}ChatGPT Bridge (Phase 3):${NC}"
+    echo -e "  ${GREEN}api${NC}        Start Vault API server (port 8900)"
+    echo -e "  ${GREEN}api-test${NC}   Run API test suite"
+    echo ""
+    echo -e "${CYAN}Full Loop Autonomy (Phase 4):${NC}"
+    echo -e "  ${GREEN}gap-scan${NC}   Scan vault for knowledge gaps"
+    echo -e "  ${GREEN}gap-report${NC} Generate gap analysis report"
+    echo -e "  ${GREEN}research${NC}   Generate auto-research prompts"
+    echo -e "  ${GREEN}digest${NC}     Generate weekly digest"
+    echo -e "  ${GREEN}memo${NC}       Show full memo/vault status"
+    echo -e "  ${GREEN}memo-tick${NC}  Run auto-loop tick (gaps + research + digest)"
+    echo -e "  ${GREEN}claude-md${NC}  Generate CLAUDE.md context"
+    echo ""
+    echo -e "${CYAN}Sync examples:${NC}"
+    echo "  dx-sync sync \"Quyết định dùng React cho frontend\""
+    echo "  dx-sync sync --file notes.md"
+    echo "  dx-sync sync --session ~/.claude/sessions/abc123"
+    echo ""
+    echo -e "${CYAN}Environment:${NC}"
+    echo "  OBSIDIAN_VAULT_PATH  Path to Obsidian vault (default: ~/ObsidianVault)"
+    echo "  DX_LEARN_INTERVAL    Messages between auto-learn (default: 6)"
+}
+
+cmd_sync() {
+    if [ $# -eq 0 ]; then
+        echo -e "${RED}Error: No input provided${NC}"
+        echo "Usage: dx-sync sync \"text\" | --file path | --session path"
+        exit 1
+    fi
+
+    case "${1:-}" in
+        --file)
+            shift
+            echo -e "${BLUE}Syncing file: $1${NC}"
+            python3 "$SYNC_SCRIPT" --vault "$VAULT_PATH" sync --file "$1"
+            ;;
+        --session)
+            shift
+            echo -e "${BLUE}Syncing session: $1${NC}"
+            python3 "$SYNC_SCRIPT" --vault "$VAULT_PATH" sync --session "$1"
+            ;;
+        --clipboard)
+            echo -e "${BLUE}Syncing from clipboard${NC}"
+            python3 "$SYNC_SCRIPT" --vault "$VAULT_PATH" sync --clipboard
+            ;;
+        *)
+            echo -e "${BLUE}Syncing text input${NC}"
+            python3 "$SYNC_SCRIPT" --vault "$VAULT_PATH" sync --text "$*"
+            ;;
+    esac
+
+    echo -e "${GREEN}Sync complete!${NC}"
+}
+
+cmd_context() {
+    python3 "$SYNC_SCRIPT" --vault "$VAULT_PATH" context "$@"
+}
+
+cmd_status() {
+    banner
+    echo -e "${CYAN}Vault Status:${NC}"
+    python3 "$SYNC_SCRIPT" --vault "$VAULT_PATH" status
+}
+
+cmd_setup() {
+    banner
+    echo -e "${CYAN}Setting up DX Vault Sync...${NC}"
+    echo ""
+
+    if [ -z "${OBSIDIAN_VAULT_PATH:-}" ]; then
+        echo -e "${YELLOW}OBSIDIAN_VAULT_PATH not set.${NC}"
+        echo -n "Enter your Obsidian vault path [~/ObsidianVault]: "
+        read -r vault_input
+        VAULT_PATH="${vault_input:-$HOME/ObsidianVault}"
+    fi
+
+    echo -e "${BLUE}Creating vault directories...${NC}"
+    mkdir -p "$VAULT_PATH/DX-Memory"/{conversations,decisions,entities,learnings,tasks,context,_index,_templates}
+
+    echo -e "${BLUE}Installing templates...${NC}"
+    for tmpl in "$SCRIPT_DIR"/vault-template/_templates/*.md; do
+        if [ -f "$tmpl" ]; then
+            cp "$tmpl" "$VAULT_PATH/DX-Memory/_templates/"
+        fi
+    done
+
+    echo -e "${BLUE}Making hooks executable...${NC}"
+    chmod +x "$SCRIPT_DIR"/hooks/*.sh
+
+    echo -e "${BLUE}Setting up environment...${NC}"
+    ENV_LINE="export OBSIDIAN_VAULT_PATH=\"$VAULT_PATH\""
+
+    for rc in "$HOME/.bashrc" "$HOME/.zshrc"; do
+        if [ -f "$rc" ] && ! grep -q "OBSIDIAN_VAULT_PATH" "$rc"; then
+            echo "" >> "$rc"
+            echo "# DX Vault Sync" >> "$rc"
+            echo "$ENV_LINE" >> "$rc"
+            echo -e "${GREEN}Added to $rc${NC}"
+        fi
+    done
+
+    CLAUDE_SETTINGS="$HOME/.claude/settings.json"
+    if [ -f "$CLAUDE_SETTINGS" ]; then
+        echo -e "${YELLOW}Claude Code settings found at $CLAUDE_SETTINGS${NC}"
+        echo "Please add hooks manually — see $SCRIPT_DIR/claude-code-settings.json for reference"
+    fi
+
+    echo ""
+    echo -e "${GREEN}Setup complete!${NC}"
+    echo -e "Vault path: ${CYAN}$VAULT_PATH${NC}"
+    echo -e "Run ${CYAN}dx-sync demo${NC} to test with sample data"
+}
+
+cmd_demo() {
+    banner
+    echo -e "${CYAN}Running demo with sample data...${NC}"
+    echo ""
+
+    DEMO_VAULT="/tmp/dx-vault-demo"
+    mkdir -p "$DEMO_VAULT"
+
+    echo -e "${BLUE}[1/4] Syncing sample business conversation...${NC}"
+    python3 "$SYNC_SCRIPT" --vault "$DEMO_VAULT" sync --text \
+        "Hôm nay quyết định sẽ dùng FastAPI cho backend POScake v2. Lý do: hiệu năng cao hơn Flask. Cần làm: setup project structure tuần này. Học được rằng FastAPI tự generate OpenAPI docs rất tiện."
+
+    echo ""
+    echo -e "${BLUE}[2/4] Syncing sample task...${NC}"
+    python3 "$SYNC_SCRIPT" --vault "$DEMO_VAULT" sync --text \
+        "Khách hàng Ane Co Lodge cần update hệ thống POS. Deadline: cuối tháng 7. Follow-up với team dev về API integration."
+
+    echo ""
+    echo -e "${BLUE}[3/4] Loading context...${NC}"
+    python3 "$SYNC_SCRIPT" --vault "$DEMO_VAULT" context
+
+    echo ""
+    echo -e "${BLUE}[4/4] Vault status...${NC}"
+    python3 "$SYNC_SCRIPT" --vault "$DEMO_VAULT" status
+
+    echo ""
+    echo -e "${GREEN}Demo complete!${NC}"
+    echo -e "Demo vault at: ${CYAN}$DEMO_VAULT/DX-Memory/${NC}"
+    echo -e "Check the generated files with: ${CYAN}find $DEMO_VAULT -name '*.md' | head -20${NC}"
+}
+
+cmd_test() {
+    echo -e "${CYAN}Running tests...${NC}"
+    python3 "$SCRIPT_DIR/tests/test_sync.py"
+}
+
+# --- Phase 2: Business Data Commands ---
+
+BIZ_COLLECTOR="$SCRIPT_DIR/scripts/business_collector.py"
+BIZ_LOOP="$SCRIPT_DIR/scripts/business_loop.py"
+
+cmd_biz() {
+    if [ $# -lt 2 ]; then
+        echo -e "${RED}Usage: dx-sync biz <type> <json-data>${NC}"
+        echo "Types: market, marketing, finance, competitor, report"
+        exit 1
+    fi
+    local biz_type="$1"; shift
+    echo -e "${BLUE}Processing $biz_type data...${NC}"
+    python3 "$BIZ_COLLECTOR" --vault "$VAULT_PATH" --type "$biz_type" --data "$*"
+    echo -e "${GREEN}Business data synced!${NC}"
+}
+
+cmd_biz_loop() {
+    local subcmd="${1:-list}"
+    shift 2>/dev/null || true
+    case "$subcmd" in
+        prompt)
+            python3 "$BIZ_LOOP" --vault "$VAULT_PATH" prompt "$@"
+            ;;
+        loop)
+            python3 "$BIZ_LOOP" --vault "$VAULT_PATH" loop "$@"
+            ;;
+        list)
+            echo -e "${CYAN}Available business loop tasks:${NC}"
+            python3 "$BIZ_LOOP" --vault "$VAULT_PATH" list
+            ;;
+        *)
+            echo "Usage: dx-sync biz-loop [list|prompt <task>|loop --entities ...]"
+            ;;
+    esac
+}
+
+cmd_biz_status() {
+    banner
+    echo -e "${CYAN}Business Data Status:${NC}"
+    python3 "$BIZ_COLLECTOR" --vault "$VAULT_PATH" --stats
+}
+
+cmd_biz_demo() {
+    banner
+    echo -e "${CYAN}Running Business Data demo...${NC}"
+    echo ""
+
+    echo -e "${BLUE}[1/5] Creating market intelligence note...${NC}"
+    python3 "$BIZ_COLLECTOR" --vault "$VAULT_PATH" --type market --source bigdata --data '{
+        "company_name": "DX Advisory",
+        "metrics": {"market_cap": 5000000, "pe_ratio": 15.2, "eps": 3.4, "price": 52.0},
+        "sentiment": {"score": 72, "trend": "improving", "summary": "Positive outlook driven by AI adoption strategy"},
+        "events": [
+            {"date": "2026-07-01", "title": "Q2 Earnings Call"},
+            {"date": "2026-07-15", "title": "Product Launch Event"}
+        ],
+        "raw_summary": "DX Advisory shows strong growth trajectory with focus on AI-powered business solutions."
+    }'
+
+    echo ""
+    echo -e "${BLUE}[2/5] Creating marketing analytics report...${NC}"
+    python3 "$BIZ_COLLECTOR" --vault "$VAULT_PATH" --type marketing --source supermetrics --data '{
+        "platform": "Google Ads",
+        "period": "2026-06",
+        "totals": {"spend": 15000000, "impressions": 850000, "clicks": 42500, "conversions": 1275, "revenue": 63750000, "ctr": 5.0, "cpc": 353, "roas": 4.25},
+        "campaigns": [
+            {"name": "Brand Awareness Q2", "spend": 5000000, "clicks": 15000, "conversions": 450, "roas": 4.5},
+            {"name": "Product Launch", "spend": 7000000, "clicks": 21000, "conversions": 630, "roas": 4.1},
+            {"name": "Retargeting", "spend": 3000000, "clicks": 6500, "conversions": 195, "roas": 4.8}
+        ]
+    }'
+
+    echo ""
+    echo -e "${BLUE}[3/5] Creating finance snapshot...${NC}"
+    python3 "$BIZ_COLLECTOR" --vault "$VAULT_PATH" --type finance --source manual --data '{
+        "entity": "DX Advisory",
+        "period": "2026-06",
+        "revenue": 201900000,
+        "costs": 138300000,
+        "profit": 63600000,
+        "orders": 500,
+        "customers": 356,
+        "close_rate": 93.63,
+        "previous_period": {
+            "revenue": 377800000,
+            "costs": 278400000,
+            "profit": 99400000,
+            "orders": 916,
+            "customers": 689
+        },
+        "notes": "T6 ghi nhận sụt giảm do tính mùa vụ và điều chỉnh chiến lược marketing",
+        "action_items": [
+            "Review lại chiến lược quảng cáo Q3",
+            "Tăng cường chương trình giữ chân khách hàng",
+            "Đánh giá lại kênh marketing hiệu quả nhất"
+        ]
+    }'
+
+    echo ""
+    echo -e "${BLUE}[4/5] Creating daily report...${NC}"
+    python3 "$BIZ_COLLECTOR" --vault "$VAULT_PATH" --type report --data '{
+        "finance": {"revenue": 201900000, "profit": 63600000, "orders": 500, "customers": 356},
+        "marketing": {"spend": 15000000, "roas": 4.25, "conversions": 1275, "ctr": 5.0},
+        "market": ["DX Advisory maintains positive market sentiment", "AI adoption accelerating in SME segment"],
+        "alerts": ["Revenue dropped 46.6% vs T5 — seasonal adjustment needed", "Customer acquisition cost rising"],
+        "action_items": ["Review Q3 marketing strategy", "Optimize customer retention program"]
+    }'
+
+    echo ""
+    echo -e "${BLUE}[5/5] Business data status...${NC}"
+    python3 "$BIZ_COLLECTOR" --vault "$VAULT_PATH" --stats
+
+    echo ""
+    echo -e "${GREEN}Business demo complete!${NC}"
+    echo -e "Check: ${CYAN}find $VAULT_PATH/DX-Memory/business -name '*.md' | head -20${NC}"
+}
+
+# --- Phase 3: API Commands ---
+
+# --- Phase 4: Full Loop Autonomy Commands ---
+
+GAP_DETECTOR="$SCRIPT_DIR/scripts/gap_detector.py"
+AUTO_RESEARCH="$SCRIPT_DIR/scripts/auto_research.py"
+WEEKLY_DIGEST="$SCRIPT_DIR/scripts/weekly_digest.py"
+MEMO_BRIDGE="$SCRIPT_DIR/scripts/memo_bridge.py"
+
+cmd_gap_scan() {
+    echo -e "${CYAN}Scanning vault for knowledge gaps...${NC}"
+    python3 "$GAP_DETECTOR" --vault "$VAULT_PATH" scan
+}
+
+cmd_gap_report() {
+    banner
+    echo -e "${CYAN}Generating gap analysis report...${NC}"
+    echo ""
+    python3 "$GAP_DETECTOR" --vault "$VAULT_PATH" report
+}
+
+cmd_research() {
+    local subcmd="${1:-prompt}"
+    shift 2>/dev/null || true
+    case "$subcmd" in
+        prompt)
+            echo -e "${CYAN}Generating auto-research prompts...${NC}"
+            python3 "$AUTO_RESEARCH" --vault "$VAULT_PATH" prompt
+            ;;
+        plan)
+            python3 "$AUTO_RESEARCH" --vault "$VAULT_PATH" plan
+            ;;
+        script)
+            python3 "$AUTO_RESEARCH" --vault "$VAULT_PATH" script
+            ;;
+        history)
+            python3 "$AUTO_RESEARCH" --vault "$VAULT_PATH" history
+            ;;
+        store)
+            python3 "$AUTO_RESEARCH" --vault "$VAULT_PATH" store "$@"
+            ;;
+        *)
+            echo "Usage: dx-sync research [prompt|plan|script|history|store]"
+            ;;
+    esac
+}
+
+cmd_digest() {
+    banner
+    local days="${1:-7}"
+    echo -e "${CYAN}Generating digest for last $days days...${NC}"
+    echo ""
+    python3 "$WEEKLY_DIGEST" --vault "$VAULT_PATH" --days "$days" generate
+}
+
+cmd_memo() {
+    banner
+    echo -e "${CYAN}Full Vault Memory Status:${NC}"
+    python3 "$MEMO_BRIDGE" --vault "$VAULT_PATH" status
+}
+
+cmd_memo_tick() {
+    echo -e "${CYAN}Running auto-loop tick...${NC}"
+    python3 "$MEMO_BRIDGE" --vault "$VAULT_PATH" tick
+}
+
+cmd_claude_md() {
+    local output="${1:-}"
+    if [ -n "$output" ]; then
+        echo -e "${CYAN}Generating CLAUDE.md context → $output${NC}"
+        python3 "$MEMO_BRIDGE" --vault "$VAULT_PATH" claude-md --output "$output"
+        echo -e "${GREEN}Written to $output${NC}"
+    else
+        python3 "$MEMO_BRIDGE" --vault "$VAULT_PATH" claude-md
+    fi
+}
+
+# --- Phase 3: API Commands ---
+
+API_SERVER="$SCRIPT_DIR/api/server.py"
+
+cmd_api() {
+    banner
+    local port="${1:-8900}"
+    echo -e "${CYAN}Starting DX Vault API on port $port...${NC}"
+    echo -e "Vault: ${GREEN}$VAULT_PATH${NC}"
+    echo -e "Docs:  ${CYAN}http://localhost:$port/docs${NC}"
+    echo -e "Spec:  ${CYAN}http://localhost:$port/openapi.json${NC}"
+    echo ""
+    OBSIDIAN_VAULT_PATH="$VAULT_PATH" DX_VAULT_API_PORT="$port" python3 "$API_SERVER"
+}
+
+cmd_api_test() {
+    echo -e "${CYAN}Running API tests...${NC}"
+    python3 "$SCRIPT_DIR/tests/test_api.py"
+}
+
+case "${1:-}" in
+    sync)       shift; cmd_sync "$@" ;;
+    context)    shift; cmd_context "$@" ;;
+    status)     cmd_status ;;
+    setup)      cmd_setup ;;
+    demo)       cmd_demo ;;
+    test)       cmd_test ;;
+    biz)        shift; cmd_biz "$@" ;;
+    biz-loop)   shift; cmd_biz_loop "$@" ;;
+    biz-status) cmd_biz_status ;;
+    biz-demo)   cmd_biz_demo ;;
+    api)        shift; cmd_api "$@" ;;
+    api-test)   cmd_api_test ;;
+    gap-scan)   cmd_gap_scan ;;
+    gap-report) cmd_gap_report ;;
+    research)   shift; cmd_research "$@" ;;
+    digest)     shift; cmd_digest "$@" ;;
+    memo)       cmd_memo ;;
+    memo-tick)  cmd_memo_tick ;;
+    claude-md)  shift; cmd_claude_md "$@" ;;
+    -h|--help|help|"") usage ;;
+    *)
+        echo -e "${RED}Unknown command: $1${NC}"
+        usage
+        exit 1
+        ;;
+esac
