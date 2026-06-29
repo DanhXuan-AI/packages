@@ -1,0 +1,393 @@
+openapi: 3.1.0
+info:
+  title: DX Vault Sync API
+  description: >
+    API bridge for ChatGPT Custom GPT to read/write Obsidian Vault (Second Brain).
+    Enables cross-platform memory sync between Claude Code, ChatGPT, and Jarvis OS.
+  version: 1.0.0
+servers:
+  - url: https://your-server.example.com
+    description: Production server (replace with your actual URL)
+
+paths:
+  /api/vault/context:
+    get:
+      operationId: getVaultContext
+      summary: Load active context from Obsidian Vault
+      description: >
+        Call this at the START of every conversation to load the user's
+        current context — recent decisions, open tasks, and preferences.
+      parameters:
+        - name: query
+          in: query
+          schema:
+            type: string
+          description: Optional search query to find relevant context
+        - name: category
+          in: query
+          schema:
+            type: string
+            enum: [decision, learning, task, entity, context, conversation]
+          description: Filter by category
+        - name: hours
+          in: query
+          schema:
+            type: integer
+            default: 24
+          description: Hours of recent context to load
+      responses:
+        "200":
+          description: Context loaded successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  context:
+                    type: string
+                    description: Formatted context summary in markdown
+                  loaded_at:
+                    type: string
+
+  /api/vault/search:
+    get:
+      operationId: searchVault
+      summary: Search across all vault notes
+      description: Search for notes matching a query. Returns previews.
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Search query
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            maximum: 50
+      responses:
+        "200":
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/NoteOut"
+                  query:
+                    type: string
+                  total:
+                    type: integer
+
+  /api/vault/notes:
+    get:
+      operationId: listNotes
+      summary: List vault notes by category
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+            enum:
+              - decision
+              - learning
+              - task
+              - entity
+              - context
+              - conversation
+              - market-intel
+              - marketing-analytics
+              - finance-snapshots
+              - alerts
+              - competitors
+              - reports
+          description: Filter by note category
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            maximum: 50
+      responses:
+        "200":
+          description: List of notes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/NoteOut"
+
+  /api/vault/note:
+    get:
+      operationId: readNote
+      summary: Read a specific vault note with full content
+      parameters:
+        - name: path
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Full path to the note file
+      responses:
+        "200":
+          description: Full note content
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  filename:
+                    type: string
+                  frontmatter:
+                    type: object
+                  content:
+                    type: string
+                  path:
+                    type: string
+
+  /api/vault/stats:
+    get:
+      operationId: getVaultStats
+      summary: Get vault statistics
+      responses:
+        "200":
+          description: Vault statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_notes:
+                    type: integer
+                  categories:
+                    type: object
+                  last_sync:
+                    type: string
+                  business_stats:
+                    type: object
+
+  /api/vault/alerts:
+    get:
+      operationId: getAlerts
+      summary: Get business alerts
+      description: Returns unread business anomaly alerts.
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            default: unread
+            enum: [unread, all]
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: Business alerts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AlertOut"
+
+  /api/vault/trends:
+    get:
+      operationId: getTrends
+      summary: Get business trend data
+      parameters:
+        - name: metric
+          in: query
+          schema:
+            type: string
+          description: Filter by metric name
+        - name: days
+          in: query
+          schema:
+            type: integer
+            default: 7
+            maximum: 30
+      responses:
+        "200":
+          description: Trend data
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /api/vault/sync:
+    post:
+      operationId: syncContent
+      summary: Sync text content to vault
+      description: >
+        Extracts insights (decisions, learnings, tasks, entities) from text
+        and creates Obsidian notes. Call this when the user shares important
+        information that should be remembered.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text:
+                  type: string
+                  description: Text content to extract and sync
+                source:
+                  type: string
+                  default: chatgpt
+      responses:
+        "200":
+          description: Sync result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  insights_found:
+                    type: integer
+                  files_written:
+                    type: integer
+                  categories:
+                    type: object
+
+  /api/vault/business:
+    post:
+      operationId: syncBusinessData
+      summary: Sync business data to vault
+      description: >
+        Store structured business data — finance snapshots, marketing analytics,
+        market intel, competitor intel, or daily reports.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [data_type, data]
+              properties:
+                data_type:
+                  type: string
+                  enum: [market, marketing, finance, competitor, report]
+                data:
+                  type: object
+                  description: Structured business data
+                source:
+                  type: string
+                  default: chatgpt
+      responses:
+        "200":
+          description: Business data synced
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  written:
+                    type: string
+                  data_type:
+                    type: string
+
+  /api/vault/learn:
+    post:
+      operationId: learnInsight
+      summary: Store a specific learning or decision
+      description: >
+        Directly store a categorized insight. Use when you know the exact
+        category — more targeted than /sync.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties:
+                content:
+                  type: string
+                  description: The insight content
+                category:
+                  type: string
+                  default: learning
+                  enum: [learning, decision, task, entity, context]
+                tags:
+                  type: array
+                  items:
+                    type: string
+                source:
+                  type: string
+                  default: chatgpt
+      responses:
+        "200":
+          description: Insight stored
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  category:
+                    type: string
+                  title:
+                    type: string
+                  path:
+                    type: string
+
+components:
+  schemas:
+    NoteOut:
+      type: object
+      properties:
+        filename:
+          type: string
+        category:
+          type: string
+        created:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        content_preview:
+          type: string
+        path:
+          type: string
+
+    AlertOut:
+      type: object
+      properties:
+        filename:
+          type: string
+        severity:
+          type: string
+        entity:
+          type: string
+        period:
+          type: string
+        alerts:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+        created:
+          type: string
+
+  securitySchemes:
+    apiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+
+security:
+  - apiKey: []

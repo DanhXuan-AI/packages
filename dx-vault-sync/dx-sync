@@ -52,6 +52,10 @@ usage() {
     echo -e "  ${GREEN}biz-status${NC} Show business data statistics"
     echo -e "  ${GREEN}biz-demo${NC}   Run business data demo"
     echo ""
+    echo -e "${CYAN}ChatGPT Bridge (Phase 3):${NC}"
+    echo -e "  ${GREEN}api${NC}        Start Vault API server (port 8900)"
+    echo -e "  ${GREEN}api-test${NC}   Run API test suite"
+    echo ""
     echo -e "${CYAN}Sync examples:${NC}"
     echo "  dx-sync sync \"Quyết định dùng React cho frontend\""
     echo "  dx-sync sync --file notes.md"
@@ -306,6 +310,26 @@ cmd_biz_demo() {
     echo -e "Check: ${CYAN}find $VAULT_PATH/DX-Memory/business -name '*.md' | head -20${NC}"
 }
 
+# --- Phase 3: API Commands ---
+
+API_SERVER="$SCRIPT_DIR/api/server.py"
+
+cmd_api() {
+    banner
+    local port="${1:-8900}"
+    echo -e "${CYAN}Starting DX Vault API on port $port...${NC}"
+    echo -e "Vault: ${GREEN}$VAULT_PATH${NC}"
+    echo -e "Docs:  ${CYAN}http://localhost:$port/docs${NC}"
+    echo -e "Spec:  ${CYAN}http://localhost:$port/openapi.json${NC}"
+    echo ""
+    OBSIDIAN_VAULT_PATH="$VAULT_PATH" DX_VAULT_API_PORT="$port" python3 "$API_SERVER"
+}
+
+cmd_api_test() {
+    echo -e "${CYAN}Running API tests...${NC}"
+    python3 "$SCRIPT_DIR/tests/test_api.py"
+}
+
 case "${1:-}" in
     sync)       shift; cmd_sync "$@" ;;
     context)    shift; cmd_context "$@" ;;
@@ -317,6 +341,8 @@ case "${1:-}" in
     biz-loop)   shift; cmd_biz_loop "$@" ;;
     biz-status) cmd_biz_status ;;
     biz-demo)   cmd_biz_demo ;;
+    api)        shift; cmd_api "$@" ;;
+    api-test)   cmd_api_test ;;
     -h|--help|help|"") usage ;;
     *)
         echo -e "${RED}Unknown command: $1${NC}"
