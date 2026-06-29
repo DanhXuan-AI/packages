@@ -39,12 +39,18 @@ usage() {
     echo "  dx-sync <command> [options]"
     echo ""
     echo -e "${CYAN}Commands:${NC}"
-    echo -e "  ${GREEN}sync${NC}     Sync content to Obsidian Vault"
-    echo -e "  ${GREEN}context${NC}  Load context from Vault"
-    echo -e "  ${GREEN}status${NC}   Show vault statistics"
-    echo -e "  ${GREEN}setup${NC}    Interactive setup wizard"
-    echo -e "  ${GREEN}demo${NC}     Run demo with sample data"
-    echo -e "  ${GREEN}test${NC}     Run test suite"
+    echo -e "  ${GREEN}sync${NC}       Sync content to Obsidian Vault"
+    echo -e "  ${GREEN}context${NC}    Load context from Vault"
+    echo -e "  ${GREEN}status${NC}     Show vault statistics"
+    echo -e "  ${GREEN}setup${NC}      Interactive setup wizard"
+    echo -e "  ${GREEN}demo${NC}       Run demo with sample data"
+    echo -e "  ${GREEN}test${NC}       Run test suite"
+    echo ""
+    echo -e "${CYAN}Business Data (Phase 2):${NC}"
+    echo -e "  ${GREEN}biz${NC}        Process business data into vault"
+    echo -e "  ${GREEN}biz-loop${NC}   Generate MCP prompts for data collection"
+    echo -e "  ${GREEN}biz-status${NC} Show business data statistics"
+    echo -e "  ${GREEN}biz-demo${NC}   Run business data demo"
     echo ""
     echo -e "${CYAN}Sync examples:${NC}"
     echo "  dx-sync sync \"Quyết định dùng React cho frontend\""
@@ -182,13 +188,135 @@ cmd_test() {
     python3 "$SCRIPT_DIR/tests/test_sync.py"
 }
 
+# --- Phase 2: Business Data Commands ---
+
+BIZ_COLLECTOR="$SCRIPT_DIR/scripts/business_collector.py"
+BIZ_LOOP="$SCRIPT_DIR/scripts/business_loop.py"
+
+cmd_biz() {
+    if [ $# -lt 2 ]; then
+        echo -e "${RED}Usage: dx-sync biz <type> <json-data>${NC}"
+        echo "Types: market, marketing, finance, competitor, report"
+        exit 1
+    fi
+    local biz_type="$1"; shift
+    echo -e "${BLUE}Processing $biz_type data...${NC}"
+    python3 "$BIZ_COLLECTOR" --vault "$VAULT_PATH" --type "$biz_type" --data "$*"
+    echo -e "${GREEN}Business data synced!${NC}"
+}
+
+cmd_biz_loop() {
+    local subcmd="${1:-list}"
+    shift 2>/dev/null || true
+    case "$subcmd" in
+        prompt)
+            python3 "$BIZ_LOOP" --vault "$VAULT_PATH" prompt "$@"
+            ;;
+        loop)
+            python3 "$BIZ_LOOP" --vault "$VAULT_PATH" loop "$@"
+            ;;
+        list)
+            echo -e "${CYAN}Available business loop tasks:${NC}"
+            python3 "$BIZ_LOOP" --vault "$VAULT_PATH" list
+            ;;
+        *)
+            echo "Usage: dx-sync biz-loop [list|prompt <task>|loop --entities ...]"
+            ;;
+    esac
+}
+
+cmd_biz_status() {
+    banner
+    echo -e "${CYAN}Business Data Status:${NC}"
+    python3 "$BIZ_COLLECTOR" --vault "$VAULT_PATH" --stats
+}
+
+cmd_biz_demo() {
+    banner
+    echo -e "${CYAN}Running Business Data demo...${NC}"
+    echo ""
+
+    echo -e "${BLUE}[1/5] Creating market intelligence note...${NC}"
+    python3 "$BIZ_COLLECTOR" --vault "$VAULT_PATH" --type market --source bigdata --data '{
+        "company_name": "DX Advisory",
+        "metrics": {"market_cap": 5000000, "pe_ratio": 15.2, "eps": 3.4, "price": 52.0},
+        "sentiment": {"score": 72, "trend": "improving", "summary": "Positive outlook driven by AI adoption strategy"},
+        "events": [
+            {"date": "2026-07-01", "title": "Q2 Earnings Call"},
+            {"date": "2026-07-15", "title": "Product Launch Event"}
+        ],
+        "raw_summary": "DX Advisory shows strong growth trajectory with focus on AI-powered business solutions."
+    }'
+
+    echo ""
+    echo -e "${BLUE}[2/5] Creating marketing analytics report...${NC}"
+    python3 "$BIZ_COLLECTOR" --vault "$VAULT_PATH" --type marketing --source supermetrics --data '{
+        "platform": "Google Ads",
+        "period": "2026-06",
+        "totals": {"spend": 15000000, "impressions": 850000, "clicks": 42500, "conversions": 1275, "revenue": 63750000, "ctr": 5.0, "cpc": 353, "roas": 4.25},
+        "campaigns": [
+            {"name": "Brand Awareness Q2", "spend": 5000000, "clicks": 15000, "conversions": 450, "roas": 4.5},
+            {"name": "Product Launch", "spend": 7000000, "clicks": 21000, "conversions": 630, "roas": 4.1},
+            {"name": "Retargeting", "spend": 3000000, "clicks": 6500, "conversions": 195, "roas": 4.8}
+        ]
+    }'
+
+    echo ""
+    echo -e "${BLUE}[3/5] Creating finance snapshot...${NC}"
+    python3 "$BIZ_COLLECTOR" --vault "$VAULT_PATH" --type finance --source manual --data '{
+        "entity": "DX Advisory",
+        "period": "2026-06",
+        "revenue": 201900000,
+        "costs": 138300000,
+        "profit": 63600000,
+        "orders": 500,
+        "customers": 356,
+        "close_rate": 93.63,
+        "previous_period": {
+            "revenue": 377800000,
+            "costs": 278400000,
+            "profit": 99400000,
+            "orders": 916,
+            "customers": 689
+        },
+        "notes": "T6 ghi nhận sụt giảm do tính mùa vụ và điều chỉnh chiến lược marketing",
+        "action_items": [
+            "Review lại chiến lược quảng cáo Q3",
+            "Tăng cường chương trình giữ chân khách hàng",
+            "Đánh giá lại kênh marketing hiệu quả nhất"
+        ]
+    }'
+
+    echo ""
+    echo -e "${BLUE}[4/5] Creating daily report...${NC}"
+    python3 "$BIZ_COLLECTOR" --vault "$VAULT_PATH" --type report --data '{
+        "finance": {"revenue": 201900000, "profit": 63600000, "orders": 500, "customers": 356},
+        "marketing": {"spend": 15000000, "roas": 4.25, "conversions": 1275, "ctr": 5.0},
+        "market": ["DX Advisory maintains positive market sentiment", "AI adoption accelerating in SME segment"],
+        "alerts": ["Revenue dropped 46.6% vs T5 — seasonal adjustment needed", "Customer acquisition cost rising"],
+        "action_items": ["Review Q3 marketing strategy", "Optimize customer retention program"]
+    }'
+
+    echo ""
+    echo -e "${BLUE}[5/5] Business data status...${NC}"
+    python3 "$BIZ_COLLECTOR" --vault "$VAULT_PATH" --stats
+
+    echo ""
+    echo -e "${GREEN}Business demo complete!${NC}"
+    echo -e "Check: ${CYAN}find $VAULT_PATH/DX-Memory/business -name '*.md' | head -20${NC}"
+}
+
 case "${1:-}" in
-    sync)    shift; cmd_sync "$@" ;;
-    context) shift; cmd_context "$@" ;;
-    status)  cmd_status ;;
-    setup)   cmd_setup ;;
-    demo)    cmd_demo ;;
-    test)    cmd_test ;;
+    sync)       shift; cmd_sync "$@" ;;
+    context)    shift; cmd_context "$@" ;;
+    status)     cmd_status ;;
+    setup)      cmd_setup ;;
+    demo)       cmd_demo ;;
+    test)       cmd_test ;;
+    biz)        shift; cmd_biz "$@" ;;
+    biz-loop)   shift; cmd_biz_loop "$@" ;;
+    biz-status) cmd_biz_status ;;
+    biz-demo)   cmd_biz_demo ;;
     -h|--help|help|"") usage ;;
     *)
         echo -e "${RED}Unknown command: $1${NC}"

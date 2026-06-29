@@ -45,6 +45,57 @@ platforms:
     enabled: false
     api_url: ""
 
+business:
+  entities:
+    - name: "DX Advisory"
+      type: "primary"
+      track: ["finance", "marketing", "market"]
+  data_sources:
+    bigdata:
+      enabled: true
+      type: "mcp"
+      tools_prefix: "mcp__Bigdata_com__"
+      capabilities: ["company_tearsheet", "sentiment", "events", "search"]
+      use_for: ["market-intel", "competitors", "news-scan"]
+    supermetrics:
+      enabled: true
+      type: "mcp"
+      tools_prefix: "mcp__Supermetrics_Marketing_Analytics__"
+      capabilities: ["data_query", "accounts", "fields"]
+      use_for: ["marketing-analytics"]
+    manual:
+      enabled: true
+      type: "input"
+      use_for: ["finance-snapshot"]
+  business_categories:
+    - key: "market-intel"
+      label: "Thông tin thị trường"
+      vault_dir: "business/market-intel"
+      frequency: "daily"
+    - key: "marketing-analytics"
+      label: "Phân tích Marketing"
+      vault_dir: "business/marketing-analytics"
+      frequency: "daily"
+    - key: "finance-snapshots"
+      label: "Ảnh chụp tài chính"
+      vault_dir: "business/finance-snapshots"
+      frequency: "weekly"
+    - key: "alerts"
+      label: "Cảnh báo"
+      vault_dir: "business/alerts"
+      frequency: "realtime"
+    - key: "competitors"
+      label: "Đối thủ cạnh tranh"
+      vault_dir: "business/competitors"
+      frequency: "weekly"
+    - key: "reports"
+      label: "Báo cáo tổng hợp"
+      vault_dir: "business/reports"
+      frequency: "daily"
+  anomaly_detection:
+    threshold_percent: 20
+    tracked_metrics: ["revenue", "profit", "orders", "customers"]
+
 output:
   format: "obsidian"
   frontmatter: true
