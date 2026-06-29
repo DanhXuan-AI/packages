@@ -40,6 +40,10 @@ from sync_engine import SyncEngine
 from business_collector import BusinessCollector
 from vault_writer import VaultWriter
 from context_loader import ContextLoader
+from gap_detector import GapDetector
+from auto_research import AutoResearch
+from weekly_digest import WeeklyDigest
+from memo_bridge import MemoBridge
 
 VAULT_PATH = os.environ.get("OBSIDIAN_VAULT_PATH", "/home/user/ObsidianVault")
 API_KEY = os.environ.get("DX_VAULT_API_KEY", "")
@@ -68,6 +72,10 @@ app.add_middleware(
 engine = SyncEngine(VAULT_PATH, MEMORY_DIR)
 collector = BusinessCollector(VAULT_PATH, MEMORY_DIR)
 loader = ContextLoader(VAULT_PATH, MEMORY_DIR)
+gap_detector = GapDetector(VAULT_PATH, MEMORY_DIR)
+auto_researcher = AutoResearch(VAULT_PATH, MEMORY_DIR)
+digest_gen = WeeklyDigest(VAULT_PATH, MEMORY_DIR)
+memo_bridge = MemoBridge(VAULT_PATH, MEMORY_DIR)
 
 
 def verify_api_key(x_api_key: str = Header(default="")):
@@ -470,6 +478,68 @@ async def learn_insight(
         path=str(path),
         timestamp=datetime.now().isoformat(),
     )
+
+
+# --- Phase 4: Full Loop Autonomy Endpoints ---
+
+
+@app.get("/api/vault/gaps", response_model=dict)
+async def get_gaps(_auth: bool = Depends(verify_api_key)):
+    """Scan vault for knowledge gaps, stale data, broken links, and missing topics.
+    Returns health score (0-100) and categorized gap analysis."""
+    return gap_detector.scan_and_score()
+
+
+@app.get("/api/vault/gaps/report", response_model=dict)
+async def get_gap_report(_auth: bool = Depends(verify_api_key)):
+    """Generate a human-readable gap analysis report in markdown."""
+    report = gap_detector.generate_gap_report()
+    return {"report": report, "generated_at": datetime.now().isoformat()}
+
+
+@app.get("/api/vault/research", response_model=dict)
+async def get_research_prompts(
+    max_items: int = Query(default=5, ge=1, le=20),
+    _auth: bool = Depends(verify_api_key),
+):
+    """Generate auto-research prompts from detected knowledge gaps."""
+    plan = auto_researcher.analyze_and_plan(max_items)
+    return plan
+
+
+@app.post("/api/vault/research/store", response_model=dict)
+async def store_research(
+    topic: str = Query(..., description="Research topic"),
+    findings: str = Query(..., description="Research findings to store"),
+    source: str = Query(default="api", description="Research source"),
+    _auth: bool = Depends(verify_api_key),
+):
+    """Store research findings in the vault."""
+    path = auto_researcher.store_research_result(topic, findings, source)
+    return {"stored": str(path), "topic": topic, "timestamp": datetime.now().isoformat()}
+
+
+@app.get("/api/vault/digest", response_model=dict)
+async def get_digest(
+    days: int = Query(default=7, ge=1, le=30),
+    _auth: bool = Depends(verify_api_key),
+):
+    """Generate a weekly digest of vault activity."""
+    md = digest_gen.generate_markdown(days)
+    return {"digest": md, "days": days, "generated_at": datetime.now().isoformat()}
+
+
+@app.get("/api/vault/memo/status", response_model=dict)
+async def get_memo_status(_auth: bool = Depends(verify_api_key)):
+    """Get full vault memory status including health, gaps, and recommendations."""
+    return memo_bridge.get_full_status()
+
+
+@app.post("/api/vault/memo/tick", response_model=dict)
+async def memo_tick(_auth: bool = Depends(verify_api_key)):
+    """Run an auto-loop tick: check gaps, generate research prompts, update context cache,
+    and auto-generate weekly digest on Mondays."""
+    return memo_bridge.auto_loop_tick()
 
 
 if __name__ == "__main__":

@@ -56,6 +56,15 @@ usage() {
     echo -e "  ${GREEN}api${NC}        Start Vault API server (port 8900)"
     echo -e "  ${GREEN}api-test${NC}   Run API test suite"
     echo ""
+    echo -e "${CYAN}Full Loop Autonomy (Phase 4):${NC}"
+    echo -e "  ${GREEN}gap-scan${NC}   Scan vault for knowledge gaps"
+    echo -e "  ${GREEN}gap-report${NC} Generate gap analysis report"
+    echo -e "  ${GREEN}research${NC}   Generate auto-research prompts"
+    echo -e "  ${GREEN}digest${NC}     Generate weekly digest"
+    echo -e "  ${GREEN}memo${NC}       Show full memo/vault status"
+    echo -e "  ${GREEN}memo-tick${NC}  Run auto-loop tick (gaps + research + digest)"
+    echo -e "  ${GREEN}claude-md${NC}  Generate CLAUDE.md context"
+    echo ""
     echo -e "${CYAN}Sync examples:${NC}"
     echo "  dx-sync sync \"Quyết định dùng React cho frontend\""
     echo "  dx-sync sync --file notes.md"
@@ -312,6 +321,83 @@ cmd_biz_demo() {
 
 # --- Phase 3: API Commands ---
 
+# --- Phase 4: Full Loop Autonomy Commands ---
+
+GAP_DETECTOR="$SCRIPT_DIR/scripts/gap_detector.py"
+AUTO_RESEARCH="$SCRIPT_DIR/scripts/auto_research.py"
+WEEKLY_DIGEST="$SCRIPT_DIR/scripts/weekly_digest.py"
+MEMO_BRIDGE="$SCRIPT_DIR/scripts/memo_bridge.py"
+
+cmd_gap_scan() {
+    echo -e "${CYAN}Scanning vault for knowledge gaps...${NC}"
+    python3 "$GAP_DETECTOR" --vault "$VAULT_PATH" scan
+}
+
+cmd_gap_report() {
+    banner
+    echo -e "${CYAN}Generating gap analysis report...${NC}"
+    echo ""
+    python3 "$GAP_DETECTOR" --vault "$VAULT_PATH" report
+}
+
+cmd_research() {
+    local subcmd="${1:-prompt}"
+    shift 2>/dev/null || true
+    case "$subcmd" in
+        prompt)
+            echo -e "${CYAN}Generating auto-research prompts...${NC}"
+            python3 "$AUTO_RESEARCH" --vault "$VAULT_PATH" prompt
+            ;;
+        plan)
+            python3 "$AUTO_RESEARCH" --vault "$VAULT_PATH" plan
+            ;;
+        script)
+            python3 "$AUTO_RESEARCH" --vault "$VAULT_PATH" script
+            ;;
+        history)
+            python3 "$AUTO_RESEARCH" --vault "$VAULT_PATH" history
+            ;;
+        store)
+            python3 "$AUTO_RESEARCH" --vault "$VAULT_PATH" store "$@"
+            ;;
+        *)
+            echo "Usage: dx-sync research [prompt|plan|script|history|store]"
+            ;;
+    esac
+}
+
+cmd_digest() {
+    banner
+    local days="${1:-7}"
+    echo -e "${CYAN}Generating digest for last $days days...${NC}"
+    echo ""
+    python3 "$WEEKLY_DIGEST" --vault "$VAULT_PATH" --days "$days" generate
+}
+
+cmd_memo() {
+    banner
+    echo -e "${CYAN}Full Vault Memory Status:${NC}"
+    python3 "$MEMO_BRIDGE" --vault "$VAULT_PATH" status
+}
+
+cmd_memo_tick() {
+    echo -e "${CYAN}Running auto-loop tick...${NC}"
+    python3 "$MEMO_BRIDGE" --vault "$VAULT_PATH" tick
+}
+
+cmd_claude_md() {
+    local output="${1:-}"
+    if [ -n "$output" ]; then
+        echo -e "${CYAN}Generating CLAUDE.md context → $output${NC}"
+        python3 "$MEMO_BRIDGE" --vault "$VAULT_PATH" claude-md --output "$output"
+        echo -e "${GREEN}Written to $output${NC}"
+    else
+        python3 "$MEMO_BRIDGE" --vault "$VAULT_PATH" claude-md
+    fi
+}
+
+# --- Phase 3: API Commands ---
+
 API_SERVER="$SCRIPT_DIR/api/server.py"
 
 cmd_api() {
@@ -343,6 +429,13 @@ case "${1:-}" in
     biz-demo)   cmd_biz_demo ;;
     api)        shift; cmd_api "$@" ;;
     api-test)   cmd_api_test ;;
+    gap-scan)   cmd_gap_scan ;;
+    gap-report) cmd_gap_report ;;
+    research)   shift; cmd_research "$@" ;;
+    digest)     shift; cmd_digest "$@" ;;
+    memo)       cmd_memo ;;
+    memo-tick)  cmd_memo_tick ;;
+    claude-md)  shift; cmd_claude_md "$@" ;;
     -h|--help|help|"") usage ;;
     *)
         echo -e "${RED}Unknown command: $1${NC}"

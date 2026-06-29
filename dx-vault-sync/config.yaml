@@ -96,6 +96,33 @@ business:
     threshold_percent: 20
     tracked_metrics: ["revenue", "profit", "orders", "customers"]
 
+autonomy:
+  gap_scan:
+    enabled: true
+    frequency: "daily"
+    stale_thresholds:
+      task: 7
+      decision: 30
+      entity: 14
+      learning: 60
+      context: 30
+      finance-snapshots: 7
+      marketing-analytics: 7
+      market-intel: 14
+  auto_research:
+    enabled: true
+    max_prompts_per_scan: 5
+    sources: ["bigdata", "supermetrics", "web"]
+  weekly_digest:
+    enabled: true
+    day: "monday"
+    default_days: 7
+    auto_save: true
+  memo_bridge:
+    claude_md_inject: true
+    jarvis_export: false
+    auto_tick: true
+
 output:
   format: "obsidian"
   frontmatter: true
