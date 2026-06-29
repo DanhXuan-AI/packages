@@ -1,0 +1,53 @@
+vault:
+  path: "${OBSIDIAN_VAULT_PATH:-~/ObsidianVault}"
+  memory_dir: "DX-Memory"
+
+sync:
+  auto_extract: true
+  learn_interval: 6
+  max_conversation_notes: 1000
+  dedup_threshold: 0.85
+
+categories:
+  - key: "decision"
+    label: "Quyết định"
+    vault_dir: "decisions"
+    tags: ["decision", "strategy", "action"]
+  - key: "learning"
+    label: "Kiến thức"
+    vault_dir: "learnings"
+    tags: ["learning", "insight", "technique"]
+  - key: "entity"
+    label: "Thực thể"
+    vault_dir: "entities"
+    tags: ["person", "company", "project", "product"]
+  - key: "task"
+    label: "Công việc"
+    vault_dir: "tasks"
+    tags: ["todo", "action-item", "follow-up"]
+  - key: "context"
+    label: "Ngữ cảnh"
+    vault_dir: "context"
+    tags: ["preference", "habit", "style"]
+  - key: "conversation"
+    label: "Hội thoại"
+    vault_dir: "conversations"
+    tags: ["conversation", "session", "chat"]
+
+platforms:
+  claude_code:
+    enabled: true
+    session_dir: "~/.claude/sessions"
+  chatgpt:
+    enabled: false
+    export_dir: ""
+  jarvis:
+    enabled: false
+    api_url: ""
+
+output:
+  format: "obsidian"
+  frontmatter: true
+  wiki_links: true
+  auto_tag: true
+  language: "vi"

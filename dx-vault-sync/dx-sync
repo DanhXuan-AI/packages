@@ -1,0 +1,198 @@
+#!/usr/bin/env bash
+# DX Vault Sync — Main CLI entry point
+# Usage:
+#   dx-sync sync "some text to extract and save"
+#   dx-sync sync --file conversation.md
+#   dx-sync sync --session ~/.claude/sessions/abc
+#   dx-sync context
+#   dx-sync context --query "FastAPI"
+#   dx-sync status
+#   dx-sync setup
+#   dx-sync demo
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SYNC_SCRIPT="${SCRIPT_DIR}/scripts/sync_engine.py"
+VAULT_PATH="${OBSIDIAN_VAULT_PATH:-$HOME/ObsidianVault}"
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+PURPLE='\033[0;35m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+banner() {
+    echo -e "${PURPLE}"
+    echo "  ╔══════════════════════════════════════╗"
+    echo "  ║       DX Vault Sync v1.0.0           ║"
+    echo "  ║  Claude ↔ Obsidian Auto-Sync Engine  ║"
+    echo "  ╚══════════════════════════════════════╝"
+    echo -e "${NC}"
+}
+
+usage() {
+    banner
+    echo -e "${CYAN}Usage:${NC}"
+    echo "  dx-sync <command> [options]"
+    echo ""
+    echo -e "${CYAN}Commands:${NC}"
+    echo -e "  ${GREEN}sync${NC}     Sync content to Obsidian Vault"
+    echo -e "  ${GREEN}context${NC}  Load context from Vault"
+    echo -e "  ${GREEN}status${NC}   Show vault statistics"
+    echo -e "  ${GREEN}setup${NC}    Interactive setup wizard"
+    echo -e "  ${GREEN}demo${NC}     Run demo with sample data"
+    echo -e "  ${GREEN}test${NC}     Run test suite"
+    echo ""
+    echo -e "${CYAN}Sync examples:${NC}"
+    echo "  dx-sync sync \"Quyết định dùng React cho frontend\""
+    echo "  dx-sync sync --file notes.md"
+    echo "  dx-sync sync --session ~/.claude/sessions/abc123"
+    echo ""
+    echo -e "${CYAN}Environment:${NC}"
+    echo "  OBSIDIAN_VAULT_PATH  Path to Obsidian vault (default: ~/ObsidianVault)"
+    echo "  DX_LEARN_INTERVAL    Messages between auto-learn (default: 6)"
+}
+
+cmd_sync() {
+    if [ $# -eq 0 ]; then
+        echo -e "${RED}Error: No input provided${NC}"
+        echo "Usage: dx-sync sync \"text\" | --file path | --session path"
+        exit 1
+    fi
+
+    case "${1:-}" in
+        --file)
+            shift
+            echo -e "${BLUE}Syncing file: $1${NC}"
+            python3 "$SYNC_SCRIPT" --vault "$VAULT_PATH" sync --file "$1"
+            ;;
+        --session)
+            shift
+            echo -e "${BLUE}Syncing session: $1${NC}"
+            python3 "$SYNC_SCRIPT" --vault "$VAULT_PATH" sync --session "$1"
+            ;;
+        --clipboard)
+            echo -e "${BLUE}Syncing from clipboard${NC}"
+            python3 "$SYNC_SCRIPT" --vault "$VAULT_PATH" sync --clipboard
+            ;;
+        *)
+            echo -e "${BLUE}Syncing text input${NC}"
+            python3 "$SYNC_SCRIPT" --vault "$VAULT_PATH" sync --text "$*"
+            ;;
+    esac
+
+    echo -e "${GREEN}Sync complete!${NC}"
+}
+
+cmd_context() {
+    python3 "$SYNC_SCRIPT" --vault "$VAULT_PATH" context "$@"
+}
+
+cmd_status() {
+    banner
+    echo -e "${CYAN}Vault Status:${NC}"
+    python3 "$SYNC_SCRIPT" --vault "$VAULT_PATH" status
+}
+
+cmd_setup() {
+    banner
+    echo -e "${CYAN}Setting up DX Vault Sync...${NC}"
+    echo ""
+
+    if [ -z "${OBSIDIAN_VAULT_PATH:-}" ]; then
+        echo -e "${YELLOW}OBSIDIAN_VAULT_PATH not set.${NC}"
+        echo -n "Enter your Obsidian vault path [~/ObsidianVault]: "
+        read -r vault_input
+        VAULT_PATH="${vault_input:-$HOME/ObsidianVault}"
+    fi
+
+    echo -e "${BLUE}Creating vault directories...${NC}"
+    mkdir -p "$VAULT_PATH/DX-Memory"/{conversations,decisions,entities,learnings,tasks,context,_index,_templates}
+
+    echo -e "${BLUE}Installing templates...${NC}"
+    for tmpl in "$SCRIPT_DIR"/vault-template/_templates/*.md; do
+        if [ -f "$tmpl" ]; then
+            cp "$tmpl" "$VAULT_PATH/DX-Memory/_templates/"
+        fi
+    done
+
+    echo -e "${BLUE}Making hooks executable...${NC}"
+    chmod +x "$SCRIPT_DIR"/hooks/*.sh
+
+    echo -e "${BLUE}Setting up environment...${NC}"
+    ENV_LINE="export OBSIDIAN_VAULT_PATH=\"$VAULT_PATH\""
+
+    for rc in "$HOME/.bashrc" "$HOME/.zshrc"; do
+        if [ -f "$rc" ] && ! grep -q "OBSIDIAN_VAULT_PATH" "$rc"; then
+            echo "" >> "$rc"
+            echo "# DX Vault Sync" >> "$rc"
+            echo "$ENV_LINE" >> "$rc"
+            echo -e "${GREEN}Added to $rc${NC}"
+        fi
+    done
+
+    CLAUDE_SETTINGS="$HOME/.claude/settings.json"
+    if [ -f "$CLAUDE_SETTINGS" ]; then
+        echo -e "${YELLOW}Claude Code settings found at $CLAUDE_SETTINGS${NC}"
+        echo "Please add hooks manually — see $SCRIPT_DIR/claude-code-settings.json for reference"
+    fi
+
+    echo ""
+    echo -e "${GREEN}Setup complete!${NC}"
+    echo -e "Vault path: ${CYAN}$VAULT_PATH${NC}"
+    echo -e "Run ${CYAN}dx-sync demo${NC} to test with sample data"
+}
+
+cmd_demo() {
+    banner
+    echo -e "${CYAN}Running demo with sample data...${NC}"
+    echo ""
+
+    DEMO_VAULT="/tmp/dx-vault-demo"
+    mkdir -p "$DEMO_VAULT"
+
+    echo -e "${BLUE}[1/4] Syncing sample business conversation...${NC}"
+    python3 "$SYNC_SCRIPT" --vault "$DEMO_VAULT" sync --text \
+        "Hôm nay quyết định sẽ dùng FastAPI cho backend POScake v2. Lý do: hiệu năng cao hơn Flask. Cần làm: setup project structure tuần này. Học được rằng FastAPI tự generate OpenAPI docs rất tiện."
+
+    echo ""
+    echo -e "${BLUE}[2/4] Syncing sample task...${NC}"
+    python3 "$SYNC_SCRIPT" --vault "$DEMO_VAULT" sync --text \
+        "Khách hàng Ane Co Lodge cần update hệ thống POS. Deadline: cuối tháng 7. Follow-up với team dev về API integration."
+
+    echo ""
+    echo -e "${BLUE}[3/4] Loading context...${NC}"
+    python3 "$SYNC_SCRIPT" --vault "$DEMO_VAULT" context
+
+    echo ""
+    echo -e "${BLUE}[4/4] Vault status...${NC}"
+    python3 "$SYNC_SCRIPT" --vault "$DEMO_VAULT" status
+
+    echo ""
+    echo -e "${GREEN}Demo complete!${NC}"
+    echo -e "Demo vault at: ${CYAN}$DEMO_VAULT/DX-Memory/${NC}"
+    echo -e "Check the generated files with: ${CYAN}find $DEMO_VAULT -name '*.md' | head -20${NC}"
+}
+
+cmd_test() {
+    echo -e "${CYAN}Running tests...${NC}"
+    python3 "$SCRIPT_DIR/tests/test_sync.py"
+}
+
+case "${1:-}" in
+    sync)    shift; cmd_sync "$@" ;;
+    context) shift; cmd_context "$@" ;;
+    status)  cmd_status ;;
+    setup)   cmd_setup ;;
+    demo)    cmd_demo ;;
+    test)    cmd_test ;;
+    -h|--help|help|"") usage ;;
+    *)
+        echo -e "${RED}Unknown command: $1${NC}"
+        usage
+        exit 1
+        ;;
+esac

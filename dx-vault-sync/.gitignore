@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+logs/
+.vault_context.md
+.message_counter
