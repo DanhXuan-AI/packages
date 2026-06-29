@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# DX Vault Sync — Post-conversation hook for Claude Code
-# Automatically extracts insights and syncs to Obsidian Vault
-# after each Claude Code conversation ends.
+# DX Vault Sync — Stop hook for Claude Code
+# Auto-syncs conversation to vault + refreshes context + runs memo tick.
+# Claude Code passes JSON payload on stdin with transcript_path.
 #
-# Install: Add to Claude Code settings.json hooks.post_conversation
-# Or symlink to ~/.claude/hooks/post_conversation.sh
+# Hook event: Stop
 
-set -euo pipefail
+set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SYNC_SCRIPT="${SCRIPT_DIR}/../scripts/sync_engine.py"
+MEMO_BRIDGE="${SCRIPT_DIR}/../scripts/memo_bridge.py"
 VAULT_PATH="${OBSIDIAN_VAULT_PATH:-$HOME/ObsidianVault}"
 LOG_DIR="${SCRIPT_DIR}/../logs"
 LOG_FILE="${LOG_DIR}/sync_$(date +%Y%m%d).log"
@@ -20,22 +20,40 @@ log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG_FILE"
 }
 
-log "Post-conversation hook triggered"
+log "Stop hook triggered (project: ${PWD})"
 
-if [ -n "${CLAUDE_SESSION_DIR:-}" ] && [ -d "$CLAUDE_SESSION_DIR" ]; then
-    log "Syncing session: $CLAUDE_SESSION_DIR"
-    python3 "$SYNC_SCRIPT" --vault "$VAULT_PATH" sync --session "$CLAUDE_SESSION_DIR" >> "$LOG_FILE" 2>&1
-    log "Session sync complete"
-
-elif [ -n "${CLAUDE_CONVERSATION_TEXT:-}" ]; then
-    log "Syncing conversation text"
-    python3 "$SYNC_SCRIPT" --vault "$VAULT_PATH" sync --text "$CLAUDE_CONVERSATION_TEXT" >> "$LOG_FILE" 2>&1
-    log "Text sync complete"
-
-else
-    log "No session or conversation data available, skipping"
+PAYLOAD=""
+if ! [ -t 0 ]; then
+    PAYLOAD=$(cat 2>/dev/null || true)
 fi
 
-CONTEXT_OUTPUT="${SCRIPT_DIR}/../.vault_context.md"
-python3 "$SYNC_SCRIPT" --vault "$VAULT_PATH" context --output "$CONTEXT_OUTPUT" >> "$LOG_FILE" 2>&1
-log "Context refreshed at $CONTEXT_OUTPUT"
+TRANSCRIPT=""
+if [ -n "$PAYLOAD" ]; then
+    TRANSCRIPT=$(echo "$PAYLOAD" | python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    print(data.get('transcript_path', data.get('session_dir', '')))
+except: pass
+" 2>/dev/null || true)
+fi
+
+if [ -n "$TRANSCRIPT" ] && [ -e "$TRANSCRIPT" ]; then
+    if [ -d "$TRANSCRIPT" ]; then
+        log "Syncing session dir: $TRANSCRIPT"
+        python3 "$SYNC_SCRIPT" --vault "$VAULT_PATH" sync --session "$TRANSCRIPT" >> "$LOG_FILE" 2>&1
+    elif [ -f "$TRANSCRIPT" ]; then
+        log "Syncing transcript file: $TRANSCRIPT"
+        python3 "$SYNC_SCRIPT" --vault "$VAULT_PATH" sync --file "$TRANSCRIPT" >> "$LOG_FILE" 2>&1
+    fi
+    log "Transcript sync complete"
+else
+    log "No transcript available, refreshing context only"
+fi
+
+log "Running memo tick (context refresh + gap check)"
+python3 "$MEMO_BRIDGE" --vault "$VAULT_PATH" tick >> "$LOG_FILE" 2>&1
+log "Memo tick complete"
+
+echo "0" > "${SCRIPT_DIR}/../.message_counter" 2>/dev/null || true
+log "Message counter reset"
